@@ -1,0 +1,297 @@
+<?
+/*
+	class.CSVfile 1.0  2000/04/22
+
+	A class for maintaining CSV files.
+	Author: Lars Holm Nielsen <lars@xenux.dk>
+	
+	Licence: OpenSource
+	
+	TODO:
+	Errorchecking, further advancements (e.g. sort functions etc.)
+*/
+
+if ( !defined( "CSVFILE_LIBRARY" ) )
+{
+
+class CSVfile {
+	var $filename 	= "";		// Filename
+	var $fp 		= false;	// Filepointer - false if no file open
+	var $mode 		= "r";		// Open mode - default is read only
+	var $length 	= 65536;	// Default length of line (must be greater than the longest line)
+	var $delimiter	= "|";		// Default delimiter
+
+
+//#######################################
+//#										#
+//#         Public methods				#
+//#										#
+//#######################################
+
+
+/*
+* void CSVfile( [string], [int] );
+* Description: 	Constructor
+*/
+	function CSVfile($filename = "", $length = ""){
+		if( $filename != "" )							// If filename is include in creation of a class
+			$this->setFilename($filename);				// Then set it.
+		
+		if( ( $length != "" ) )							// If length is include in creation of a class
+			$this->setLength($length);					// Then set it.
+	}
+
+
+/*
+* boolean open(string);
+* Description: 	Opens $filename with $mode. Returns true on success, false otherwise.
+*/
+	function open($mode){
+		if( ( $this->filename != "" ) && $this->is_mode($mode) ) {	// Do we have a filename and a valid mode?
+			if($this->fp) { $this->close(); }						// YES - But if other file is open, then close it.
+			$fp = fopen($this->filename,$mode);						// Open the file.
+			if( $fp ){												// If success, then set mode and filepointer
+				$this->mode	= $mode;
+				$this->fp 	= $fp;
+				return true;
+			}
+			else{
+				$this->fp	= false;
+				$this->mode	= false;
+				return false;
+			}
+		}
+		else {														// NO -  Return false.
+			return false;
+		}
+	}
+
+
+/*
+* boolean close();
+* Description: 	Close an open file. Returns true on success, false otherwise.
+*/
+	function close(){
+		if($this->fp){				// If filepointer exists then
+			fclose($this->fp);		// close file.
+			$this->fp = false;		// Reset class variable
+			$this->mode = false;
+			return true;			// and return true
+		}
+		else {						// else return false (no file open).
+			return false;
+		}
+	}
+
+
+/*
+* boolean addRow(array,[string]);
+* Description: 	Add array to CSV file delimited by delimiter. Returns true if succeeded, false otherwise.
+*				[string] is used by $this->removeRow(), and should not be used out side the class.
+*/
+	function addRow($data,$type = "add"){
+		// If file is open in the right mode and we have some data then
+		if( $this->fp && (is_array($data)) && ( (($this->mode == "a") && ($type == "add")) || (($this->mode == "w") && ($type == "delete")) ) ){
+			// Count how many fields we need (field1|field2|...|fieldn).
+			$elements = count($data);
+			for( $i = 0; $i < $elements; $i++ ){
+				// Create the entry to add to CSV file.
+				$CSVentry = ( $i == 0 ) ? $data[$i] : $CSVentry.$this->delimiter.$data[$i] ;
+			}
+			
+			// If succesfully written to file then
+			if( (fputs($this->fp,$CSVentry."\n")) )
+				return true;
+			else
+				return false;
+		}
+		else{
+			// If no file is open, or we have a wrong mode/datatype/no data then print error msg
+			$this->halt("No file open or wrong mode/data");
+			return false;
+		}
+	}
+
+/*
+* array readRow();
+* Description: 	Read a line in CSV file, except the last those with 1 element which is like "".
+*				Returns an array with the read data if succeeded, false otherwise. 
+*/
+	function readRow(){
+		// If we have an open file in the right mode then...
+		if($this->fp && (( $this->mode == "r" ) || ( $this->mode == "r+" )) ){
+			// If read row from CSV file
+			if( $row = fgetcsv( $this->fp, $this->length, $this->delimiter) ){
+				// Don't return a blank line (for instance the last)
+				if( (count($row) != 1) && ($row[0] != ""))
+					// Return CSV line in an array
+					return $row;
+				else
+					return false;
+			}
+			else {
+				return false;
+			}
+		}
+		else {
+			// If no file is open, or we have a wrong mode then print error msg
+			$this->halt("No file open or wrong mode");
+			return false;
+		}
+	}
+
+
+/*
+* boolean removeRow(string, [int]);
+* Description: 	Read entire CSV file except the row "WHERE element[$field] like $test", 
+*				and writes all read data. Returns true on succeess, false otherwise.
+*/
+	function removeRow($test,$field = 1){
+		
+		// Store mode so we can open the file in the same state as it was before.
+		if( $this->mode ){ $tmp_mode = $this->mode; $tmp = true; } else { $tmp = false; }
+		
+		// Open file for reading, if field is of type int and test isn't empty
+		if( $this->open("r") && (gettype($field) == "integer") && ($test != "") ){
+			
+			// Set some test variables
+			$i = 0; $succes = false;
+			
+			while( $row = $this->readRow() ){		// While we have some data the read it
+				$elements = count($row);			// Count no. of fields for later usage.
+				if( $row[$field-1] != $test ){		// If field no. <field> in read row doesn't contain <test>
+					$listRows[$i] = $row; 			// Then add it to list
+					$i++;
+				}
+				else {
+					$success = true;				// Else we have found the row to remove.
+				}
+			}
+			$this->close();							// Close file, while we need to truncate the file to
+													// zero length, and write all data again except the 
+													// row we wanted to remove (i.e $success = true).
+			
+			if( $success ){							// We have found the row we want to remove, and we
+													// can therefore write data again (this will remove the wanted row)
+
+				if(is_array($listRows)){			// If we only had one line in CSV, which we have to remove, then
+													// we don't have any other data to write. 
+					reset($listRows);				// Make sure the internal pointer in the array is points to the first
+													// element.
+					$this->open("w");				// Open the file for writing and truncate it to zero length.
+					for( $i = 0; $i < count( $listRows ); $i++ ) {
+						$this->addRow( $listRows[$i],"delete");		// Add all rows to file (while the row we wanted to
+																	// remove isn't save in the var, then it will be removed.
+					}
+					$this->close();					// Close the file
+				}
+				else {
+					$this->open("w");				// We hadn't any data to save, but we need to remove the row
+													// This is done be opening the file in mode "w" and close it again.
+					$this->close();
+				}
+				
+				if($tmp) { $this->open($tmp_mode); } // If the user had a fileopen we it invoked the function,
+													 // Then open it again.
+				return true;
+			}
+			else {
+				if($tmp) { $this->open($tmp_mode); } // Same as the above.
+				return false;
+			}
+		}
+		else{
+			$this->halt("Couldn't open file, or error in parameters parsed to function!");
+			return false;
+		}
+	}
+
+/*
+* boolean setFilename(string);
+* Description: 	Sets filename to open. Returns true on succeess, false otherwise.
+*/
+	function setFilename($filename){
+		if( $this->file_check($filename) ){		// Check if the file exists.
+			if( $this->fp ) { $this->close(); } // If file open, then close it.
+			$this->filename = $filename;		// Set filename
+			return true;
+		}
+		else {									// Filename does not exists.
+			$this->halt("File does not exists");// Print error message to screen,
+			return false;						// and return false.
+		}
+	}
+
+/*
+* boolean setDelimiter([string]);
+* Description: 	Sets delimiter. If not argument are provided, default value is used. Returns true.
+*/
+	function setDelimiter($delimiter = ""){
+		if( $delimiter != "" )					// Has the user provided an delimiter?
+			$this->delimiter = $delimiter;		// YES - Set delimiter.
+		else
+			$this->delimiter = "|";				// NO - Set default delimiter.
+		
+		return true;							// Returns true.
+	}
+
+
+/*
+* boolean setLength([int]);
+* Description: 	Sets length of longest line. If not argument are provided, default value is used.
+*				Returns true on positives integers, false otherwise.
+*/
+	function setLength($length = 65536){
+		if( (gettype($length) == "integer") && ( $length > 0 ) ){	// Argument must be of type int, and greater than zero
+			$this->length = $length;								// Set length.
+			return true;
+		}
+		else {
+			$this->halt("Couldn't set line length");				// Print error message.
+			return false;
+		}
+	}
+
+
+//#######################################
+//#										#
+//#         Private methods				#
+//#										#
+//#######################################
+
+
+/*
+* boolean is_mode(string);
+* Description: 	Checks string to see if it is a valid mode. Returns true on succeess, false otherwise.
+*/
+	function is_mode($mode){
+		if( ( $mode == "r" ) || ( $mode == "r+" ) || ( $mode == "w" ) || ( $mode == "w+" ) || ( $mode == "a" ) || ( $mode == "a+" ) )
+			return true; 	// Referer to http://www.php.net/manual/function.fopen.php for valid modes and there meanings.
+		else
+			return false;
+	}
+
+
+/*
+* boolean file_check(string);
+* Description: 	Checks string to see if $filename exists. Returns true on succeess, false otherwise.
+*/
+	function file_check($filename){
+		if( file_exists($filename) )	// Does the file exists?
+			return true;				// YES
+		else
+			return false;				// NO
+	}
+
+/*
+* void halt(string);
+* Description: 	Prints an error message.
+*/
+	function halt($msg){
+		echo "<b>CSV File Error:</b> $msg<br>";
+		return;
+  	}
+}
+
+}
+?>

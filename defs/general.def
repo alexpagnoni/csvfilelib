@@ -1,0 +1,39 @@
+# Module short name
+MODULEIDNAME       = csvfilelib
+
+# Module version number
+MODULEVERSION      = 1.0.0
+
+# Module release date
+MODULEDATE         = 10/10/2000
+
+# Module long description
+MODULEDESCRIPTION  = CSV file library
+
+# Module dependencies
+MODULEDEPENDENCIES =
+
+# Module suggestions
+MODULESUGGESTIONS  =
+
+MODULE_AUTHOR        = Lars Holm Nielsen
+
+MODULE_AUTHOR_EMAIL  = lars@xenux.dk
+
+MODULE_AUTHOR_SITE   = 
+
+MODULE_SUPPORT_EMAIL =
+
+MODULE_BUGS_EMAIL    =
+
+MODULE_COPYRIGHT     =
+
+MODULE_LICENSE       = Open Source
+
+MODULE_LICENSE_FILE  = LICENSE
+
+MODULE_MAINTAINER    = Alex Pagnoni - Solarix
+
+MODULE_MAINTAINER_EMAIL = alex.pagnoni@solarix.biz
+
+MODULE_CATEGORY      = libraries
